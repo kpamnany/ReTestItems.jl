@@ -701,6 +701,7 @@ function include_testfiles!(project_name, projectfile, paths, shouldrun, verbose
         return setups
     end
     hidden_re = r"\.\w"
+    incl_lock = ReentrantLock()
     @sync for (root, d, files) in Base.walkdir(project_root)
         if subproject_root !== nothing && startswith(root, subproject_root)
             @debugv 1 "Skipping files in `$root` in subproject `$subproject_root`"
@@ -733,11 +734,13 @@ function include_testfiles!(project_name, projectfile, paths, shouldrun, verbose
             push!(dir_node, file_node)
             @debugv 1 "Including test items from file `$filepath`"
             @spawn begin
-                task_local_storage(:__RE_TEST_RUNNING__, true) do
-                    task_local_storage(:__RE_TEST_ITEMS__, ($file_node, $testitem_names)) do
-                        task_local_storage(:__RE_TEST_PROJECT__, $(project_root)) do
-                            task_local_storage(:__RE_TEST_SETUPS__, $setup_channel) do
-                                checked_include(Main, $filepath)
+                lock(incl_lock) do
+                    task_local_storage(:__RE_TEST_RUNNING__, true) do
+                        task_local_storage(:__RE_TEST_ITEMS__, ($file_node, $testitem_names)) do
+                            task_local_storage(:__RE_TEST_PROJECT__, $(project_root)) do
+                                task_local_storage(:__RE_TEST_SETUPS__, $setup_channel) do
+                                    checked_include(Main, $filepath)
+                                end
                             end
                         end
                     end
